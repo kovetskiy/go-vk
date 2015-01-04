@@ -12,13 +12,13 @@ import (
 
 const (
 	//actual version
-	apiVersion     = "5.27"
+	apiVersion = "5.27"
 	//url for authorization
-	authUrl        = "https://oauth.vk.com/authorize"
+	authUrl = "https://oauth.vk.com/authorize"
 	//url for get access token
 	accessTokenUrl = "https://oauth.vk.com/access_token"
 	//url for execute methods
-	methodUrl      = "https://api.vk.com/method/"
+	methodUrl = "https://api.vk.com/method/"
 )
 
 // main type of package
@@ -53,11 +53,34 @@ func (e AccessError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Summary, e.Description)
 }
 
+// you can specify pkg logger for debug library
+type Logger interface {
+	Print(v ...interface{})
+	Printf(format string, v ...interface{})
+	Println(v ...interface{})
+}
+
+var logger Logger
+
+func SetLogger(l Logger) {
+	logger = l
+}
+
+func logf(format string, v ...interface{}) {
+	if logger != nil {
+		logger.Printf(format, v...)
+	}
+}
+
 // Get authorization url for user redirection, more:
 // https://vk.com/dev/auth_sites
 func (auth Auth) GetAuthUrl() (string, error) {
+	logf("processing GetAuthUrl of %+v", auth)
+
+	logf("trying to parse '%s'", authUrl)
 	urlPieces, err := url.Parse(authUrl)
 	if err != nil {
+		logf("an error occured during parsing url: %s", err)
 		return "", err
 	}
 
@@ -69,15 +92,23 @@ func (auth Auth) GetAuthUrl() (string, error) {
 	query.Set("display", auth.Display)
 	query.Set("response_type", "code")
 
+	logf("auth url query: %+v", query)
 	urlPieces.RawQuery = query.Encode()
 
-	return urlPieces.String(), nil
+	resultUrl := urlPieces.String()
+	logf("auth url: '%s'", resultUrl)
+
+	return resultUrl, nil
 }
 
 // Get access token for 'Server Auth'
 func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
-	urlPieces, err := url.Parse(authUrl)
+	logf("processing GetAccessToken of %+v", auth)
+
+	logf("trying to parse '%s'", accessTokenUrl)
+	urlPieces, err := url.Parse(accessTokenUrl)
 	if err != nil {
+		logf("an error occured during parsing url: %s", err)
 		return AccessToken{}, err
 	}
 
@@ -89,38 +120,56 @@ func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
 	query.Set("redirect_uri", auth.RedirectUri)
 
 	urlPieces.RawQuery = query.Encode()
+	logf("access token url query: %+v", query)
 
-	resp, err := http.Get(urlPieces.String())
+	tokenUrl := urlPieces.String()
+
+	logf("trying to get content of '%s'", tokenUrl)
+	resp, err := http.Get(tokenUrl)
 	if err != nil {
+		logf("an error occured during execution GET request: %s", err)
 		return AccessToken{}, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
+	logf("received content: %s", body)
+
 	accessToken := AccessToken{}
+
+	logf("trying to unmarshal response to accessToken struct")
 	err = json.Unmarshal(body, &accessToken)
 	if err != nil {
+		logf("an error occured during json decoding: %s", err)
 		return AccessToken{}, err
 	}
 
-	//may be error?
-	if accessToken.ExpiresIn == 0 {
-		//okay, something is wrong...
-		//may be it's simple Error?
-		accessError := AccessError{}
-		err = json.Unmarshal(body, &accessError)
-		if err != nil {
-			return AccessToken{}, err
-		}
+	logf("unmarshaled data (accessToken): %+v", accessToken)
 
-		//okay we are have problems with authorization...
-		if accessError.Summary != "" {
-			return AccessToken{}, accessError
-		}
-	} else {
+	if accessToken.ExpiresIn != 0 {
+		logf("all is ok, accessToken: %+v", accessToken)
 		return accessToken, nil
 	}
+
+	//okay, something is wrong... may be it's typical error?
+	logf("accessToken.ExpiresIn = 0, trying recognize error")
+	accessError := AccessError{}
+	err = json.Unmarshal(body, &accessError)
+	if err != nil {
+		logf("an error occured during json decoding: %s", err)
+		return AccessToken{}, err
+	}
+
+	logf("unmarshaled data (accessError): %+v", accessToken)
+
+	//okay we are have problems with authorization...
+	if accessError.Summary != "" {
+		logf("problem with a getting access: %s", accessError)
+		return AccessToken{}, accessError
+	}
+
+	logf("couldn't recognize error")
 
 	return AccessToken{}, errors.New(fmt.Sprintf(
 		"Couldn't recognize error, body: %s", body))
@@ -129,35 +178,60 @@ func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
 // do you want make a request? It's it.
 func (api *Api) Request(method string, params map[string]string) (
 	map[string]interface{}, error) {
-	result := map[string]interface{}{}
+	logf("proccessing request method '%s' with params %+v of api %+v",
+		method, params, api)
 
-	urlPieces, err := url.Parse(methodUrl + method)
+	result := map[string]interface{}{}
+	rawUrl := methodUrl + method
+
+	logf("raw url for execution method is '%s'", rawUrl)
+
+	urlPieces, err := url.Parse(rawUrl)
 	if err != nil {
+		logf("an error occured during parsing url: %s", err)
 		return result, err
 	}
+
+	logf("begin to prepare the data for the request")
 
 	query := urlPieces.Query()
 	for name, value := range params {
 		query.Set(name, value)
 	}
 
+	logf("query w/o access_token and version: %+v", query)
+
 	query.Set("access_token", api.AccessToken.Token)
 	query.Set("version", apiVersion)
 
+	logf("query with access_token and version: %+v", query)
+
 	urlPieces.RawQuery = query.Encode()
 
-	resp, err := http.Get(urlPieces.String())
+	resultUrl := urlPieces.String()
+	logf("trying to get content of '%s'", resultUrl)
+	resp, err := http.Get(resultUrl)
 	if err != nil {
+		logf("an error occured during execution GET request: %s", err)
 		return result, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		logf("an error occured during reading body buffer: %s", err)
 		return result, err
 	}
 
+	logf("received: %s:", body)
+
 	err = json.Unmarshal(body, &result)
+	if err != nil {
+		logf("an error occured during json decoding: %s", err)
+	} else {
+		logf("response: %+v", result)
+	}
+
 	//may be catch {"error":{"error_code":15...blahblah?
 	return result, err
 }
