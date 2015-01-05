@@ -13,10 +13,13 @@ import (
 const (
 	//actual version
 	apiVersion = "5.27"
+
 	//url for authorization
 	authUrl = "https://oauth.vk.com/authorize"
+
 	//url for get access token
 	accessTokenUrl = "https://oauth.vk.com/access_token"
+
 	//url for execute methods
 	methodUrl = "https://api.vk.com/method/"
 )
@@ -95,21 +98,21 @@ func (auth Auth) GetAuthUrl() (string, error) {
 	logf("auth url query: %+v", query)
 	urlPieces.RawQuery = query.Encode()
 
-	resultUrl := urlPieces.String()
-	logf("auth url: '%s'", resultUrl)
+	authUrl := urlPieces.String()
+	logf("auth url: '%s'", authUrl)
 
-	return resultUrl, nil
+	return authUrl, nil
 }
 
 // Get access token for 'Server Auth'
-func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
+func (auth Auth) GetAccessToken(code string) (accessToken AccessToken, err error) {
 	logf("processing GetAccessToken of %+v", auth)
 
 	logf("trying to parse '%s'", accessTokenUrl)
 	urlPieces, err := url.Parse(accessTokenUrl)
 	if err != nil {
 		logf("an error occured during parsing url: %s", err)
-		return AccessToken{}, err
+		return
 	}
 
 	query := urlPieces.Query()
@@ -128,7 +131,7 @@ func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
 	resp, err := http.Get(tokenUrl)
 	if err != nil {
 		logf("an error occured during execution GET request: %s", err)
-		return AccessToken{}, err
+		return
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -136,20 +139,18 @@ func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
 
 	logf("received content: %s", body)
 
-	accessToken := AccessToken{}
-
 	logf("trying to unmarshal response to accessToken struct")
 	err = json.Unmarshal(body, &accessToken)
 	if err != nil {
 		logf("an error occured during json decoding: %s", err)
-		return AccessToken{}, err
+		return
 	}
 
 	logf("unmarshaled data (accessToken): %+v", accessToken)
 
 	if accessToken.ExpiresIn != 0 {
 		logf("all is ok, accessToken: %+v", accessToken)
-		return accessToken, nil
+		return
 	}
 
 	//okay, something is wrong... may be it's typical error?
@@ -158,7 +159,7 @@ func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
 	err = json.Unmarshal(body, &accessError)
 	if err != nil {
 		logf("an error occured during json decoding: %s", err)
-		return AccessToken{}, err
+		return
 	}
 
 	logf("unmarshaled data (accessError): %+v", accessToken)
@@ -177,11 +178,11 @@ func (auth Auth) GetAccessToken(code string) (AccessToken, error) {
 
 // do you want make a request? It's it.
 func (api *Api) Request(method string, params map[string]string) (
-	map[string]interface{}, error) {
+	response map[string]interface{}, err error) {
+
 	logf("proccessing request method '%s' with params %+v of api %+v",
 		method, params, api)
 
-	result := map[string]interface{}{}
 	rawUrl := methodUrl + method
 
 	logf("raw url for execution method is '%s'", rawUrl)
@@ -189,7 +190,7 @@ func (api *Api) Request(method string, params map[string]string) (
 	urlPieces, err := url.Parse(rawUrl)
 	if err != nil {
 		logf("an error occured during parsing url: %s", err)
-		return result, err
+		return
 	}
 
 	logf("begin to prepare the data for the request")
@@ -213,25 +214,25 @@ func (api *Api) Request(method string, params map[string]string) (
 	resp, err := http.Get(resultUrl)
 	if err != nil {
 		logf("an error occured during execution GET request: %s", err)
-		return result, err
+		return
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logf("an error occured during reading body buffer: %s", err)
-		return result, err
+		return
 	}
 
 	logf("received: %s:", body)
 
-	err = json.Unmarshal(body, &result)
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		logf("an error occured during json decoding: %s", err)
 	} else {
-		logf("response: %+v", result)
+		logf("response: %+v", response)
 	}
 
 	//may be catch {"error":{"error_code":15...blahblah?
-	return result, err
+	return
 }
