@@ -6,8 +6,6 @@ Basically, it helps with authorzation (vk.com uses OAuth).
 
 # Usage
 
-## Authorization
-
 Basically, you need to read this article: https://vk.com/dev/auth_sites
 
 First, you need app domain, app id and app secret (yep, you are can get
@@ -86,3 +84,7 @@ You can enable logging in library.
     vk.SetLogger(
         log.New(os.Stdout, "VK: ", log.Ldate|log.Ltime|log.Lshortfile))
 ```
+
+# Misc
+
+GoDoc: http://godoc.org/github.com/kovetskiy/go-vkcom
