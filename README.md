@@ -4,7 +4,9 @@ This is package for work with vk.com API.
 
 Basically, it helps with authorzation (vk.com uses OAuth).
 
-# Usage
+# Documentation
+
+godoc: http://godoc.org/github.com/kovetskiy/go-vkcom
 
 Basically, you need to read this article: https://vk.com/dev/auth_sites
 
@@ -76,7 +78,7 @@ if err != nil {
 fmt.Printf("%+v", response)
 ```
 
-# Tricks
+## Logging
 
 You can enable logging in library.
 
@@ -84,7 +86,3 @@ You can enable logging in library.
     vk.SetLogger(
         log.New(os.Stdout, "VK: ", log.Ldate|log.Ltime|log.Lshortfile))
 ```
-
-# Misc
-
-GoDoc: http://godoc.org/github.com/kovetskiy/go-vkcom
