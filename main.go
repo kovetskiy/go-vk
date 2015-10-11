@@ -202,7 +202,10 @@ func (api *Api) Request(method string, params map[string]string) (
 
 	logf("query w/o access_token and version: %+v", query)
 
-	query.Set("access_token", api.AccessToken.Token)
+	if api.AccessToken.Token != "" {
+		query.Set("access_token", api.AccessToken.Token)
+	}
+
 	query.Set("version", apiVersion)
 
 	logf("query with access_token and version: %+v", query)
